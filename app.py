@@ -10,6 +10,8 @@ PWD = Path(__file__).absolute().parent
 DEFAULT_PERIOD = "3mo"
 DEFAULT_SHOW_RETURNS = True
 DEFAULT_LOG_SCALE = False
+DEFAULT_INITIAL_STOCKS = 10
+MAX_STOCKS = 20
 stock_df = pd.read_csv(PWD / "data" / "spx-500.csv")
 stocks = [
     (f"{record['Security']} ({record['Symbol']})", record["Symbol"])
@@ -35,9 +37,9 @@ def create_price_plot(
     for df, ticker in dfs:
         y_values = df["Close"]
         if show_returns:
-            # Calculate percentage returns from first day
+            # Calculate percentage returns from first day and round to 1 decimal
             first_price = y_values.iloc[0]
-            y_values = ((y_values - first_price) / first_price) * 100
+            y_values = (((y_values - first_price) / first_price) * 100).round(1)
 
         fig.add_trace(
             go.Scatter(
@@ -75,6 +77,8 @@ def get_stock_data(
 
     for ticker in tickers:
         df = fetch_stock_data(ticker, period)
+        # Round Close prices to 1 decimal place
+        df["Close"] = df["Close"].round(1)
         all_dfs.append((df, ticker))
         if combined_df.empty:
             combined_df = df[columns].copy()
@@ -83,6 +87,9 @@ def get_stock_data(
             df_to_merge = df[columns].copy()
             df_to_merge = df_to_merge.rename(columns={"Close": ticker})  # type: ignore
             combined_df = pd.merge(combined_df, df_to_merge, on="Date")
+
+    # Sort by date in descending order (newest first)
+    combined_df = combined_df.sort_values("Date", ascending=False)
 
     fig = create_price_plot(all_dfs, use_log_scale, show_returns)
     return combined_df, fig
@@ -102,8 +109,10 @@ def update_plot(
 # Define period choices
 periods = ["5d", "1mo", "3mo", "6mo", "1y", "2y", "5y", "10y", "ytd", "max"]
 
+# Get initial stock tickers
+initial_tickers = [stock[1] for stock in stocks[:DEFAULT_INITIAL_STOCKS]]
 initials = get_stock_data(
-    [stock[1] for stock in stocks[:3]],
+    initial_tickers,
     DEFAULT_PERIOD,
     use_log_scale=DEFAULT_LOG_SCALE,
     show_returns=DEFAULT_SHOW_RETURNS,
@@ -113,10 +122,10 @@ with gr.Blocks() as demo:
     with gr.Row():
         ticker = gr.Dropdown(
             choices=stocks,
-            value=[stock[1] for stock in stocks[:3]],
+            value=initial_tickers,
             label="Ticker",
             multiselect=True,
-            max_choices=5,
+            max_choices=MAX_STOCKS,
         )
     with gr.Row():
         period = gr.Radio(
