@@ -111,6 +111,10 @@ def get_stock_data(
 ) -> tuple[pd.DataFrame | None, go.Figure]:
     """Get stock data and create plot."""
     show_returns = display_mode == DISPLAY_RETURNS
+    # Force log_scale to False when showing returns
+    if show_returns and data_type == DATA_CLOSE:
+        use_log_scale = False
+        
     all_dfs = []
     combined_df = pd.DataFrame()
     data_column = data_type.split()[0]  # "Close" or "Volume"
@@ -183,12 +187,25 @@ def on_display_mode_change(
 # Add handler for data type changes
 def on_data_type_change(data_type, ticker, period, log_scale, display_mode):
     is_volume = data_type == DATA_VOLUME
+    is_returns = display_mode == DISPLAY_RETURNS
+    
+    # Set log scale to True by default for volume
+    if is_volume:
+        log_scale = True
+    # Force log scale to False for returns
+    elif is_returns:
+        log_scale = False
+        
     new_df, new_plot = get_stock_data(
         ticker, period, log_scale, display_mode, data_type
     )
+    
     return (
         gr.update(visible=not is_volume),  # Hide display mode for volume
-        gr.update(visible=True),  # Always show log scale
+        gr.update(
+            visible=is_volume or not is_returns,  # Show for volume OR when not showing returns
+            value=log_scale
+        ),
         new_df,
         new_plot,
     )
@@ -237,9 +254,9 @@ with gr.Blocks() as demo:
     )
     with gr.Row():
         log_scale = gr.Checkbox(
-            value=DEFAULT_LOG_SCALE,
+            value=DEFAULT_LOG_SCALE if DEFAULT_DATA == DATA_CLOSE else True,  # Default to True for volume
             label="Use Logarithmic Scale",
-            visible=DEFAULT_SHOW_RETURNS != DISPLAY_RETURNS,
+            visible=True,
         )
     plot = gr.Plot(value=initials[1], label="Performance Chart")
 
