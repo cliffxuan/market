@@ -121,6 +121,23 @@ def update_plot(
     return create_price_plot(all_dfs, use_log_scale, show_returns)
 
 
+def on_display_mode_change(
+    display_mode: str, ticker: list[str], period: str, log_scale: bool
+) -> tuple[gr.components.Component, pd.DataFrame, go.Figure]:
+    """Handle display mode changes and update UI components."""
+    is_returns = display_mode == DISPLAY_RETURNS
+    # Get new data with log scale forced off for returns
+    new_df, new_plot = get_stock_data(
+        ticker, period, False if is_returns else log_scale, display_mode
+    )
+    # Return values in order matching the outputs
+    return (
+        gr.update(visible=not is_returns),  # Changed from interactive to visible
+        new_df,
+        new_plot,
+    )
+
+
 # Get initial stock tickers
 initial_tickers = [stock[1] for stock in stocks[:DEFAULT_INITIAL_STOCKS]]
 initials = get_stock_data(
@@ -160,6 +177,8 @@ with gr.Blocks() as demo:
         log_scale = gr.Checkbox(
             value=DEFAULT_LOG_SCALE,
             label="Use Logarithmic Scale",
+            visible=DEFAULT_SHOW_RETURNS
+            != DISPLAY_RETURNS,  # Initially hidden if showing returns
         )
     plot = gr.Plot(value=initials[1], label="Performance Chart")
 
@@ -172,7 +191,9 @@ with gr.Blocks() as demo:
     )
     log_scale.change(update_plot, [ticker, period, log_scale, display_mode], plot)
     display_mode.change(
-        get_stock_data, [ticker, period, log_scale, display_mode], [stock_table, plot]
+        on_display_mode_change,
+        [display_mode, ticker, period, log_scale],
+        [log_scale, stock_table, plot],
     )
 
 demo.launch(debug=True, share=True)
