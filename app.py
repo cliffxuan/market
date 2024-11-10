@@ -127,6 +127,8 @@ def get_stock_data(
                 combined_df[data_column] = (
                     (df[data_column] - first_price) / first_price * 100
                 ).round(1)
+            elif data_type == DATA_VOLUME:
+                combined_df[data_column] = combined_df[data_column].apply(format_volume)
             combined_df = combined_df.rename(columns={data_column: ticker})
         else:
             df_to_merge = df[["Date", data_column]].copy()
@@ -135,6 +137,8 @@ def get_stock_data(
                 df_to_merge[data_column] = (
                     (df[data_column] - first_price) / first_price * 100
                 ).round(1)
+            elif data_type == DATA_VOLUME:
+                df_to_merge[data_column] = df_to_merge[data_column].apply(format_volume)
             df_to_merge = df_to_merge.rename(columns={data_column: ticker})
             combined_df = pd.merge(combined_df, df_to_merge, on="Date")
 
