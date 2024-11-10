@@ -3,6 +3,7 @@ title: Market Watch
 emoji: 📊
 colorFrom: gray
 colorTo: green
+python_version: 3.12
 sdk: gradio
 sdk_version: 5.5.0
 app_file: app.py
