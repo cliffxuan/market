@@ -14,7 +14,7 @@ stocks = [
 columns = ["Date", "Open", "High", "Low", "Close", "Volume"]
 
 
-def get_stock_data(ticker: str) -> tuple[pd.DataFrame | None, go.Figure]:
+def get_stock_data(ticker: str, use_log_scale: bool = True) -> tuple[pd.DataFrame | None, go.Figure]:
     df = yf.Ticker(ticker).history("10y").reset_index()
     df["Date"] = df["Date"].dt.strftime("%Y-%m-%d")
     fig = go.Figure()
@@ -32,6 +32,7 @@ def get_stock_data(ticker: str) -> tuple[pd.DataFrame | None, go.Figure]:
         title=f"{ticker} Close Price",
         xaxis_title="Date",
         yaxis_title="Price (USD)",
+        yaxis_type="log" if use_log_scale else "linear",
         hovermode="x unified",
         template="plotly_dark",
         height=400,
@@ -43,17 +44,26 @@ def get_stock_data(ticker: str) -> tuple[pd.DataFrame | None, go.Figure]:
 initials = get_stock_data(stocks[0][1])
 with gr.Blocks() as demo:
     gr.Markdown("## Stock Price")
-    ticker = gr.Dropdown(
-        choices=stocks,
-        value=stocks[0][1],
-        label="Ticker",
-    )
+    with gr.Row():
+        ticker = gr.Dropdown(
+            choices=stocks,
+            value=stocks[0][1],
+            label="Ticker",
+        )
     stock_table = gr.DataFrame(
         value=initials[0],
         headers=columns,
         label="Stock Price Data",
     )
+    with gr.Row():
+        log_scale = gr.Checkbox(
+            value=True,
+            label="Use Logarithmic Scale",
+        )
     plot = gr.Plot(value=initials[1], label="Closing Price Chart")
-    ticker.change(get_stock_data, ticker, [stock_table, plot])
+    
+    # Update the change event to include the checkbox
+    ticker.change(get_stock_data, [ticker, log_scale], [stock_table, plot])
+    log_scale.change(get_stock_data, [ticker, log_scale], [stock_table, plot])
 
 demo.launch(debug=True, share=True)
