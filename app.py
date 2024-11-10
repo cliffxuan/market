@@ -8,7 +8,7 @@ import yfinance as yf
 
 PWD = Path(__file__).absolute().parent
 DEFAULT_PERIOD = "3mo"
-DEFAULT_SHOW_RETURNS = True
+DEFAULT_SHOW_RETURNS = "Returns (%)"
 DEFAULT_LOG_SCALE = False
 DEFAULT_INITIAL_STOCKS = 10
 MAX_STOCKS = 20
@@ -18,6 +18,9 @@ stocks = [
     for record in stock_df.to_dict("records")
 ]
 columns = ["Date", "Close"]
+
+# Add new constant for display options
+DISPLAY_OPTIONS = ["Returns (%)", "Price (USD)"]
 
 
 @lru_cache(maxsize=100)
@@ -69,9 +72,10 @@ def get_stock_data(
     tickers: list[str],
     period: str,
     use_log_scale: bool = True,
-    show_returns: bool = False,
+    display_mode: str = DEFAULT_SHOW_RETURNS,
 ) -> tuple[pd.DataFrame | None, go.Figure]:
     """Get stock data and create plot."""
+    show_returns = display_mode == "Returns (%)"
     all_dfs = []
     combined_df = pd.DataFrame()
 
@@ -109,9 +113,10 @@ def update_plot(
     tickers: list[str],
     period: str,
     use_log_scale: bool = True,
-    show_returns: bool = False,
+    display_mode: str = DEFAULT_SHOW_RETURNS,
 ) -> go.Figure:
     """Update plot only without fetching data again."""
+    show_returns = display_mode == "Returns (%)"
     all_dfs = [(fetch_stock_data(ticker, period), ticker) for ticker in tickers]
     return create_price_plot(all_dfs, use_log_scale, show_returns)
 
@@ -125,7 +130,7 @@ initials = get_stock_data(
     initial_tickers,
     DEFAULT_PERIOD,
     use_log_scale=DEFAULT_LOG_SCALE,
-    show_returns=DEFAULT_SHOW_RETURNS,
+    display_mode=DEFAULT_SHOW_RETURNS
 )
 with gr.Blocks() as demo:
     gr.Markdown("## Stock Price")
@@ -144,14 +149,15 @@ with gr.Blocks() as demo:
             label="Time Period",
         )
     with gr.Row():
-        show_returns = gr.Checkbox(
+        display_mode = gr.Radio(
+            choices=DISPLAY_OPTIONS,
             value=DEFAULT_SHOW_RETURNS,
-            label="Show Returns (%)",
+            label="Display Mode",
         )
     stock_table = gr.DataFrame(
         value=initials[0],
         headers=columns,
-        label="Stock Data",  # Updated label to be more generic
+        label="Stock Data",
     )
     with gr.Row():
         log_scale = gr.Checkbox(
@@ -161,15 +167,9 @@ with gr.Blocks() as demo:
     plot = gr.Plot(value=initials[1], label="Performance Chart")
 
     # Update the change events
-    ticker.change(
-        get_stock_data, [ticker, period, log_scale, show_returns], [stock_table, plot]
-    )
-    period.change(
-        get_stock_data, [ticker, period, log_scale, show_returns], [stock_table, plot]
-    )
-    log_scale.change(update_plot, [ticker, period, log_scale, show_returns], plot)
-    show_returns.change(
-        get_stock_data, [ticker, period, log_scale, show_returns], [stock_table, plot]
-    )
+    ticker.change(get_stock_data, [ticker, period, log_scale, display_mode], [stock_table, plot])
+    period.change(get_stock_data, [ticker, period, log_scale, display_mode], [stock_table, plot])
+    log_scale.change(update_plot, [ticker, period, log_scale, display_mode], plot)
+    display_mode.change(get_stock_data, [ticker, period, log_scale, display_mode], [stock_table, plot])
 
 demo.launch(debug=True, share=True)
