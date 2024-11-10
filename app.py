@@ -12,7 +12,7 @@ stocks = [
     (f"{record['Security']} ({record['Symbol']})", record["Symbol"])
     for record in stock_df.to_dict("records")
 ]
-columns = ["Date", "Open", "High", "Low", "Close", "Volume"]
+columns = ["Date", "Open"]
 
 
 @lru_cache(maxsize=100)
