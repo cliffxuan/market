@@ -23,15 +23,21 @@ def fetch_stock_data(ticker: str) -> pd.DataFrame:
     return df
 
 
-def create_price_plot(dfs: list[tuple[pd.DataFrame, str]], use_log_scale: bool) -> go.Figure:
+def create_price_plot(dfs: list[tuple[pd.DataFrame, str]], use_log_scale: bool, show_returns: bool) -> go.Figure:
     """Create price plot with given configuration."""
     fig = go.Figure()
     
     for df, ticker in dfs:
+        y_values = df["Close"]
+        if show_returns:
+            # Calculate percentage returns from first day
+            first_price = y_values.iloc[0]
+            y_values = ((y_values - first_price) / first_price) * 100
+
         fig.add_trace(
             go.Scatter(
                 x=df["Date"],
-                y=df["Close"],
+                y=y_values,
                 mode="lines",
                 name=ticker,
                 line=dict(width=2),
@@ -39,10 +45,10 @@ def create_price_plot(dfs: list[tuple[pd.DataFrame, str]], use_log_scale: bool) 
         )
 
     fig.update_layout(
-        title="Stock Prices",
+        title="Stock Performance",
         xaxis_title="Date",
-        yaxis_title="Price (USD)",
-        yaxis_type="log" if use_log_scale else "linear",
+        yaxis_title="Returns (%)" if show_returns else "Price (USD)",
+        yaxis_type="log" if use_log_scale and not show_returns else "linear",  # Disable log scale for returns
         hovermode="x unified",
         template="plotly_dark",
         height=400,
@@ -50,7 +56,7 @@ def create_price_plot(dfs: list[tuple[pd.DataFrame, str]], use_log_scale: bool) 
     return fig
 
 
-def get_stock_data(tickers: list[str], use_log_scale: bool = True) -> tuple[pd.DataFrame | None, go.Figure]:
+def get_stock_data(tickers: list[str], use_log_scale: bool = True, show_returns: bool = False) -> tuple[pd.DataFrame | None, go.Figure]:
     """Get stock data and create plot."""
     all_dfs = []
     combined_df = pd.DataFrame()
@@ -66,14 +72,14 @@ def get_stock_data(tickers: list[str], use_log_scale: bool = True) -> tuple[pd.D
             df_to_merge = df_to_merge.rename(columns={'Close': ticker})
             combined_df = pd.merge(combined_df, df_to_merge, on='Date')
     
-    fig = create_price_plot(all_dfs, use_log_scale)
+    fig = create_price_plot(all_dfs, use_log_scale, show_returns)
     return combined_df, fig
 
 
-def update_plot(tickers: list[str], use_log_scale: bool = True) -> go.Figure:
+def update_plot(tickers: list[str], use_log_scale: bool = True, show_returns: bool = False) -> go.Figure:
     """Update plot only without fetching data again."""
     all_dfs = [(fetch_stock_data(ticker), ticker) for ticker in tickers]
-    return create_price_plot(all_dfs, use_log_scale)
+    return create_price_plot(all_dfs, use_log_scale, show_returns)
 
 
 initials = get_stock_data([stock[1] for stock in stocks[:3]])
@@ -93,14 +99,19 @@ with gr.Blocks() as demo:
         label="Stock Price Data",
     )
     with gr.Row():
+        show_returns = gr.Checkbox(
+            value=False,
+            label="Show Returns (%)",
+        )
         log_scale = gr.Checkbox(
-            value=True,
+            value=False,
             label="Use Logarithmic Scale",
         )
-    plot = gr.Plot(value=initials[1], label="Closing Price Chart")
+    plot = gr.Plot(value=initials[1], label="Performance Chart")
     
-    # Update the change event to include the checkbox
-    ticker.change(get_stock_data, [ticker, log_scale], [stock_table, plot])
-    log_scale.change(update_plot, [ticker, log_scale], plot)
+    # Update the change events to include the new checkbox
+    ticker.change(get_stock_data, [ticker, log_scale, show_returns], [stock_table, plot])
+    log_scale.change(update_plot, [ticker, log_scale, show_returns], plot)
+    show_returns.change(update_plot, [ticker, log_scale, show_returns], plot)
 
 demo.launch(debug=True, share=True)
