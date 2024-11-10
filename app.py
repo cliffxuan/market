@@ -77,20 +77,30 @@ def get_stock_data(
 
     for ticker in tickers:
         df = fetch_stock_data(ticker, period)
-        # Round Close prices to 1 decimal place
         df["Close"] = df["Close"].round(1)
         all_dfs.append((df, ticker))
+
         if combined_df.empty:
             combined_df = df[columns].copy()
-            combined_df = combined_df.rename(columns={"Close": ticker})  # type: ignore
+            if show_returns:
+                # Calculate returns for first ticker
+                first_price = df["Close"].iloc[0]
+                combined_df["Close"] = (
+                    (df["Close"] - first_price) / first_price * 100
+                ).round(1)
+            combined_df = combined_df.rename(columns={"Close": ticker})
         else:
             df_to_merge = df[columns].copy()
-            df_to_merge = df_to_merge.rename(columns={"Close": ticker})  # type: ignore
+            if show_returns:
+                # Calculate returns for additional tickers
+                first_price = df["Close"].iloc[0]
+                df_to_merge["Close"] = (
+                    (df["Close"] - first_price) / first_price * 100
+                ).round(1)
+            df_to_merge = df_to_merge.rename(columns={"Close": ticker})
             combined_df = pd.merge(combined_df, df_to_merge, on="Date")
 
-    # Sort by date in descending order (newest first)
     combined_df = combined_df.sort_values("Date", ascending=False)
-
     fig = create_price_plot(all_dfs, use_log_scale, show_returns)
     return combined_df, fig
 
@@ -133,23 +143,24 @@ with gr.Blocks() as demo:
             value=DEFAULT_PERIOD,
             label="Time Period",
         )
-    stock_table = gr.DataFrame(
-        value=initials[0],
-        headers=columns,
-        label="Stock Price Data",
-    )
     with gr.Row():
         show_returns = gr.Checkbox(
             value=DEFAULT_SHOW_RETURNS,
             label="Show Returns (%)",
         )
+    stock_table = gr.DataFrame(
+        value=initials[0],
+        headers=columns,
+        label="Stock Data",  # Updated label to be more generic
+    )
+    with gr.Row():
         log_scale = gr.Checkbox(
             value=DEFAULT_LOG_SCALE,
             label="Use Logarithmic Scale",
         )
     plot = gr.Plot(value=initials[1], label="Performance Chart")
 
-    # Update the change events to include period
+    # Update the change events
     ticker.change(
         get_stock_data, [ticker, period, log_scale, show_returns], [stock_table, plot]
     )
@@ -157,6 +168,8 @@ with gr.Blocks() as demo:
         get_stock_data, [ticker, period, log_scale, show_returns], [stock_table, plot]
     )
     log_scale.change(update_plot, [ticker, period, log_scale, show_returns], plot)
-    show_returns.change(update_plot, [ticker, period, log_scale, show_returns], plot)
+    show_returns.change(
+        get_stock_data, [ticker, period, log_scale, show_returns], [stock_table, plot]
+    )
 
 demo.launch(debug=True, share=True)
