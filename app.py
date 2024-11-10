@@ -22,6 +22,12 @@ stocks = [
 ]
 columns = ["Date", "Close"]
 
+# Add new constants
+DATA_CLOSE = "Close Price"
+DATA_VOLUME = "Volume"
+DATA_OPTIONS = [DATA_CLOSE, DATA_VOLUME]
+DEFAULT_DATA = DATA_CLOSE
+
 
 @lru_cache(maxsize=100)
 def fetch_stock_data(ticker: str, period: str) -> pd.DataFrame:
@@ -32,14 +38,17 @@ def fetch_stock_data(ticker: str, period: str) -> pd.DataFrame:
 
 
 def create_price_plot(
-    dfs: list[tuple[pd.DataFrame, str]], use_log_scale: bool, show_returns: bool
+    dfs: list[tuple[pd.DataFrame, str]],
+    use_log_scale: bool,
+    show_returns: bool,
+    data_type: str = DATA_CLOSE,
 ) -> go.Figure:
     """Create price plot with given configuration."""
     fig = go.Figure()
 
     for df, ticker in dfs:
-        y_values = df["Close"]
-        if show_returns:
+        y_values = df[data_type.split()[0]]  # "Close" from "Close Price" or "Volume"
+        if show_returns and data_type == DATA_CLOSE:
             # Calculate percentage returns from first day and round to 1 decimal
             first_price = y_values.iloc[0]
             y_values = (((y_values - first_price) / first_price) * 100).round(1)
@@ -54,13 +63,17 @@ def create_price_plot(
             )
         )
 
+    # Determine y-axis title
+    if data_type == DATA_CLOSE:
+        y_title = DISPLAY_RETURNS if show_returns else "Price (USD)"
+    else:
+        y_title = "Volume"
+
     fig.update_layout(
         title="Stock Performance",
         xaxis_title="Date",
-        yaxis_title=DISPLAY_RETURNS if show_returns else "Price (USD)",
-        yaxis_type="log"
-        if use_log_scale and not show_returns
-        else "linear",  # Disable log scale for returns
+        yaxis_title=y_title,
+        yaxis_type="log" if use_log_scale and not show_returns else "linear",
         hovermode="x unified",
         template="plotly_dark",
         height=400,
@@ -73,39 +86,39 @@ def get_stock_data(
     period: str,
     use_log_scale: bool = True,
     display_mode: str = DEFAULT_SHOW_RETURNS,
+    data_type: str = DATA_CLOSE,
 ) -> tuple[pd.DataFrame | None, go.Figure]:
     """Get stock data and create plot."""
     show_returns = display_mode == DISPLAY_RETURNS
     all_dfs = []
     combined_df = pd.DataFrame()
+    data_column = data_type.split()[0]  # "Close" or "Volume"
 
     for ticker in tickers:
         df = fetch_stock_data(ticker, period)
-        df["Close"] = df["Close"].round(1)
+        df[data_column] = df[data_column].round(1)
         all_dfs.append((df, ticker))
 
         if combined_df.empty:
-            combined_df = df[columns].copy()
-            if show_returns:
-                # Calculate returns for first ticker
-                first_price = df["Close"].iloc[0]
-                combined_df["Close"] = (
-                    (df["Close"] - first_price) / first_price * 100
+            combined_df = df[["Date", data_column]].copy()
+            if show_returns and data_type == DATA_CLOSE:
+                first_price = df[data_column].iloc[0]
+                combined_df[data_column] = (
+                    (df[data_column] - first_price) / first_price * 100
                 ).round(1)
-            combined_df = combined_df.rename(columns={"Close": ticker})
+            combined_df = combined_df.rename(columns={data_column: ticker})
         else:
-            df_to_merge = df[columns].copy()
-            if show_returns:
-                # Calculate returns for additional tickers
-                first_price = df["Close"].iloc[0]
-                df_to_merge["Close"] = (
-                    (df["Close"] - first_price) / first_price * 100
+            df_to_merge = df[["Date", data_column]].copy()
+            if show_returns and data_type == DATA_CLOSE:
+                first_price = df[data_column].iloc[0]
+                df_to_merge[data_column] = (
+                    (df[data_column] - first_price) / first_price * 100
                 ).round(1)
-            df_to_merge = df_to_merge.rename(columns={"Close": ticker})
+            df_to_merge = df_to_merge.rename(columns={data_column: ticker})
             combined_df = pd.merge(combined_df, df_to_merge, on="Date")
 
     combined_df = combined_df.sort_values("Date", ascending=False)
-    fig = create_price_plot(all_dfs, use_log_scale, show_returns)
+    fig = create_price_plot(all_dfs, use_log_scale, show_returns, data_type)
     return combined_df, fig
 
 
@@ -114,25 +127,43 @@ def update_plot(
     period: str,
     use_log_scale: bool = True,
     display_mode: str = DEFAULT_SHOW_RETURNS,
+    data_type: str = DATA_CLOSE,
 ) -> go.Figure:
     """Update plot only without fetching data again."""
     show_returns = display_mode == DISPLAY_RETURNS
     all_dfs = [(fetch_stock_data(ticker, period), ticker) for ticker in tickers]
-    return create_price_plot(all_dfs, use_log_scale, show_returns)
+    return create_price_plot(all_dfs, use_log_scale, show_returns, data_type)
 
 
 def on_display_mode_change(
-    display_mode: str, ticker: list[str], period: str, log_scale: bool
+    display_mode: str,
+    ticker: list[str],
+    period: str,
+    log_scale: bool,
+    data_type: str,
 ) -> tuple[gr.components.Component, pd.DataFrame, go.Figure]:
     """Handle display mode changes and update UI components."""
     is_returns = display_mode == DISPLAY_RETURNS
-    # Get new data with log scale forced off for returns
     new_df, new_plot = get_stock_data(
-        ticker, period, False if is_returns else log_scale, display_mode
+        ticker, period, False if is_returns else log_scale, display_mode, data_type
     )
-    # Return values in order matching the outputs
+    # Hide returns option if viewing volume
     return (
-        gr.update(visible=not is_returns),  # Changed from interactive to visible
+        gr.update(visible=not is_returns and data_type == DATA_CLOSE),
+        new_df,
+        new_plot,
+    )
+
+
+# Add handler for data type changes
+def on_data_type_change(data_type, ticker, period, log_scale, display_mode):
+    is_volume = data_type == DATA_VOLUME
+    new_df, new_plot = get_stock_data(
+        ticker, period, log_scale, display_mode, data_type
+    )
+    return (
+        gr.update(visible=not is_volume),  # Hide display mode for volume
+        gr.update(visible=not is_volume),  # Hide log scale for volume
         new_df,
         new_plot,
     )
@@ -163,10 +194,16 @@ with gr.Blocks() as demo:
             label="Time Period",
         )
     with gr.Row():
+        data_type = gr.Radio(
+            choices=DATA_OPTIONS,
+            value=DEFAULT_DATA,
+            label="Data Type",
+        )
         display_mode = gr.Radio(
             choices=DISPLAY_OPTIONS,
             value=DEFAULT_SHOW_RETURNS,
             label="Display Mode",
+            visible=True,  # Will be updated based on data type
         )
     stock_table = gr.DataFrame(
         value=initials[0],
@@ -177,23 +214,34 @@ with gr.Blocks() as demo:
         log_scale = gr.Checkbox(
             value=DEFAULT_LOG_SCALE,
             label="Use Logarithmic Scale",
-            visible=DEFAULT_SHOW_RETURNS
-            != DISPLAY_RETURNS,  # Initially hidden if showing returns
+            visible=DEFAULT_SHOW_RETURNS != DISPLAY_RETURNS,
         )
     plot = gr.Plot(value=initials[1], label="Performance Chart")
 
-    # Update the change events
+    # Update all event handlers to include data_type
     ticker.change(
-        get_stock_data, [ticker, period, log_scale, display_mode], [stock_table, plot]
+        get_stock_data,
+        [ticker, period, log_scale, display_mode, data_type],
+        [stock_table, plot],
     )
     period.change(
-        get_stock_data, [ticker, period, log_scale, display_mode], [stock_table, plot]
+        get_stock_data,
+        [ticker, period, log_scale, display_mode, data_type],
+        [stock_table, plot],
     )
-    log_scale.change(update_plot, [ticker, period, log_scale, display_mode], plot)
+    log_scale.change(
+        update_plot, [ticker, period, log_scale, display_mode, data_type], plot
+    )
     display_mode.change(
         on_display_mode_change,
-        [display_mode, ticker, period, log_scale],
+        [display_mode, ticker, period, log_scale, data_type],
         [log_scale, stock_table, plot],
+    )
+
+    data_type.change(
+        on_data_type_change,
+        [data_type, ticker, period, log_scale, display_mode],
+        [display_mode, log_scale, stock_table, plot],
     )
 
 demo.launch(debug=True, share=True)
