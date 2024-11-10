@@ -94,7 +94,7 @@ def create_price_plot(
         title="Stock Performance",
         xaxis_title="Date",
         yaxis_title=y_title,
-        yaxis_type="log" if use_log_scale and not show_returns else "linear",
+        yaxis_type="log" if use_log_scale else "linear",
         hovermode="x unified",
         template="plotly_dark",
         height=400,
@@ -188,7 +188,7 @@ def on_data_type_change(data_type, ticker, period, log_scale, display_mode):
     )
     return (
         gr.update(visible=not is_volume),  # Hide display mode for volume
-        gr.update(visible=not is_volume),  # Hide log scale for volume
+        gr.update(visible=True),  # Always show log scale
         new_df,
         new_plot,
     )
