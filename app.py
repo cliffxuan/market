@@ -7,6 +7,7 @@ import plotly.graph_objects as go
 import yfinance as yf
 
 PWD = Path(__file__).absolute().parent
+DEFAULT_PERIOD = "3mo"
 stock_df = pd.read_csv(PWD / "data" / "spx-500.csv")
 stocks = [
     (f"{record['Security']} ({record['Symbol']})", record["Symbol"])
@@ -16,9 +17,9 @@ columns = ["Date", "Close"]
 
 
 @lru_cache(maxsize=100)
-def fetch_stock_data(ticker: str) -> pd.DataFrame:
+def fetch_stock_data(ticker: str, period: str = "10y") -> pd.DataFrame:
     """Fetch stock data from yfinance with caching."""
-    df = yf.Ticker(ticker).history("10y").reset_index()
+    df = yf.Ticker(ticker).history(period).reset_index()
     df["Date"] = df["Date"].dt.strftime("%Y-%m-%d")
     return df
 
@@ -56,13 +57,13 @@ def create_price_plot(dfs: list[tuple[pd.DataFrame, str]], use_log_scale: bool, 
     return fig
 
 
-def get_stock_data(tickers: list[str], use_log_scale: bool = True, show_returns: bool = False) -> tuple[pd.DataFrame | None, go.Figure]:
+def get_stock_data(tickers: list[str], period: str, use_log_scale: bool = True, show_returns: bool = False) -> tuple[pd.DataFrame | None, go.Figure]:
     """Get stock data and create plot."""
     all_dfs = []
     combined_df = pd.DataFrame()
     
     for ticker in tickers:
-        df = fetch_stock_data(ticker)
+        df = fetch_stock_data(ticker, period)
         all_dfs.append((df, ticker))
         if combined_df.empty:
             combined_df = df[columns].copy()
@@ -76,13 +77,16 @@ def get_stock_data(tickers: list[str], use_log_scale: bool = True, show_returns:
     return combined_df, fig
 
 
-def update_plot(tickers: list[str], use_log_scale: bool = True, show_returns: bool = False) -> go.Figure:
+def update_plot(tickers: list[str], period: str, use_log_scale: bool = True, show_returns: bool = False) -> go.Figure:
     """Update plot only without fetching data again."""
-    all_dfs = [(fetch_stock_data(ticker), ticker) for ticker in tickers]
+    all_dfs = [(fetch_stock_data(ticker, period), ticker) for ticker in tickers]
     return create_price_plot(all_dfs, use_log_scale, show_returns)
 
 
-initials = get_stock_data([stock[1] for stock in stocks[:3]])
+# Define period choices
+periods = ["5d", "1mo", "3mo", "6mo", "1y", "2y", "5y", "10y", "ytd", "max"]
+
+initials = get_stock_data([stock[1] for stock in stocks[:3]], DEFAULT_PERIOD)
 with gr.Blocks() as demo:
     gr.Markdown("## Stock Price")
     with gr.Row():
@@ -93,6 +97,12 @@ with gr.Blocks() as demo:
             multiselect=True,
             max_choices=5,
         )
+    with gr.Row():
+        period = gr.Radio(
+            choices=periods,
+            value=DEFAULT_PERIOD,
+            label="Time Period",
+        )
     stock_table = gr.DataFrame(
         value=initials[0],
         headers=columns,
@@ -100,7 +110,7 @@ with gr.Blocks() as demo:
     )
     with gr.Row():
         show_returns = gr.Checkbox(
-            value=False,
+            value=True,
             label="Show Returns (%)",
         )
         log_scale = gr.Checkbox(
@@ -109,9 +119,10 @@ with gr.Blocks() as demo:
         )
     plot = gr.Plot(value=initials[1], label="Performance Chart")
     
-    # Update the change events to include the new checkbox
-    ticker.change(get_stock_data, [ticker, log_scale, show_returns], [stock_table, plot])
-    log_scale.change(update_plot, [ticker, log_scale, show_returns], plot)
-    show_returns.change(update_plot, [ticker, log_scale, show_returns], plot)
+    # Update the change events to include period
+    ticker.change(get_stock_data, [ticker, period, log_scale, show_returns], [stock_table, plot])
+    period.change(get_stock_data, [ticker, period, log_scale, show_returns], [stock_table, plot])
+    log_scale.change(update_plot, [ticker, period, log_scale, show_returns], plot)
+    show_returns.change(update_plot, [ticker, period, log_scale, show_returns], plot)
 
 demo.launch(debug=True, share=True)
