@@ -37,6 +37,17 @@ def fetch_stock_data(ticker: str, period: str) -> pd.DataFrame:
     return df
 
 
+def format_volume(value):
+    """Format volume numbers to human-readable format."""
+    if value >= 1_000_000_000:  # Billions
+        return f"{value/1_000_000_000:.1f}B"
+    elif value >= 1_000_000:  # Millions
+        return f"{value/1_000_000:.1f}M"
+    elif value >= 1_000:  # Thousands
+        return f"{value/1_000:.1f}K"
+    return f"{value:.0f}"
+
+
 def create_price_plot(
     dfs: list[tuple[pd.DataFrame, str]],
     use_log_scale: bool,
@@ -53,6 +64,14 @@ def create_price_plot(
             first_price = y_values.iloc[0]
             y_values = (((y_values - first_price) / first_price) * 100).round(1)
 
+        # Format volume values if showing volume data
+        hover_template = None
+        if data_type == DATA_VOLUME:
+            hover_template = ticker + ": %{text}<extra></extra>"
+            text = [format_volume(v) for v in y_values]
+        else:
+            text = None
+
         fig.add_trace(
             go.Scatter(
                 x=df["Date"],
@@ -60,6 +79,8 @@ def create_price_plot(
                 mode="lines",
                 name=ticker,
                 line=dict(width=2),
+                text=text,
+                hovertemplate=hover_template,
             )
         )
 
