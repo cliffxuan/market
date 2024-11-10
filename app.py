@@ -1,22 +1,50 @@
 import gradio as gr
-import yfinance as yf
 import pandas as pd
+import plotly.graph_objects as go
+import yfinance as yf
 
-def get_stock_data(ticker):
-    stock = yf.Ticker(ticker)
-    hist = stock.history().reset_index()
-    return hist[['Date', 'Close', 'Volume']]
+columns = ["Date", "Open", "High", "Low", "Close", "Volume"]
+stocks = ["AAPL", "NVDA"]
 
-def main():
-    tickers = ['AAPL', 'GOOGL', 'MSFT', 'AMZN', 'TSLA']  # Add more tickers as needed
-    interface = gr.Interface(
-        fn=get_stock_data,
-        inputs=gr.Dropdown(choices=tickers, label="Select Stock Ticker"),
-        outputs=gr.Dataframe(label="Stock Prices"),
-        title="Stock Price Viewer",
-        description="Select a stock ticker to view the closing prices for the last 30 days."
+
+def get_stock_data(ticker: str) -> tuple[pd.DataFrame | None, go.Figure]:
+    if not ticker:
+        return None
+    df = yf.Ticker(ticker).history().reset_index()
+    df["Date"] = df["Date"].dt.strftime("%Y-%m-%d")
+    fig = go.Figure()
+    fig.add_trace(
+        go.Scatter(
+            x=df.index,
+            y=df["Close"],
+            mode="lines",
+            name="Close Price",
+            line=dict(color="#2196F3", width=2),
+        )
     )
-    interface.launch()
 
-if __name__ == "__main__":
-    main()
+    fig.update_layout(
+        title=f"{ticker} Stock Price - Last 30 Days",
+        xaxis_title="Date",
+        yaxis_title="Price (USD)",
+        hovermode="x unified",
+        template="plotly_white",
+        height=400,
+    )
+
+    return df[columns], fig
+
+
+initials = get_stock_data(stocks[0])
+with gr.Blocks() as demo:
+    gr.Markdown("## Stock Price")
+    ticker = gr.Dropdown(choices=stocks, value=stocks[0], label="Ticker")
+    stock_table = gr.DataFrame(
+        value=initials[0],
+        headers=columns,
+        label="Stock Price Data",
+    )
+    plot = gr.Plot(value=initials[1], label="Closing Price Chart")
+    ticker.change(get_stock_data, ticker, [stock_table, plot])
+
+demo.launch(debug=True, share=True)
