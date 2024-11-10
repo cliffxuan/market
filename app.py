@@ -2,9 +2,13 @@ import gradio as gr
 import pandas as pd
 import plotly.graph_objects as go
 import yfinance as yf
+from pathlib import Path
 
 columns = ["Date", "Open", "High", "Low", "Close", "Volume"]
-stocks = ["AAPL", "NVDA"]
+
+PWD = Path(__file__).absolute().parent
+
+stocks = list(pd.read_csv(PWD / "data" / "spx-500.csv")["Symbol"])
 
 
 def get_stock_data(ticker: str) -> tuple[pd.DataFrame | None, go.Figure]:
@@ -15,7 +19,7 @@ def get_stock_data(ticker: str) -> tuple[pd.DataFrame | None, go.Figure]:
     fig = go.Figure()
     fig.add_trace(
         go.Scatter(
-            x=df.index,
+            x=df["Date"],
             y=df["Close"],
             mode="lines",
             name="Close Price",
@@ -24,11 +28,11 @@ def get_stock_data(ticker: str) -> tuple[pd.DataFrame | None, go.Figure]:
     )
 
     fig.update_layout(
-        title=f"{ticker} Stock Price - Last 30 Days",
+        title=f"{ticker} Stock Price",
         xaxis_title="Date",
         yaxis_title="Price (USD)",
         hovermode="x unified",
-        template="plotly_white",
+        template="plotly_dark",
         height=400,
     )
 
