@@ -12,7 +12,7 @@ stocks = [
     (f"{record['Security']} ({record['Symbol']})", record["Symbol"])
     for record in stock_df.to_dict("records")
 ]
-columns = ["Date", "Open"]
+columns = ["Date", "Close"]
 
 
 @lru_cache(maxsize=100)
@@ -23,21 +23,23 @@ def fetch_stock_data(ticker: str) -> pd.DataFrame:
     return df
 
 
-def create_price_plot(df: pd.DataFrame, ticker: str, use_log_scale: bool) -> go.Figure:
+def create_price_plot(dfs: list[tuple[pd.DataFrame, str]], use_log_scale: bool) -> go.Figure:
     """Create price plot with given configuration."""
     fig = go.Figure()
-    fig.add_trace(
-        go.Scatter(
-            x=df["Date"],
-            y=df["Close"],
-            mode="lines",
-            name="Close Price",
-            line=dict(color="#2196F3", width=2),
+    
+    for df, ticker in dfs:
+        fig.add_trace(
+            go.Scatter(
+                x=df["Date"],
+                y=df["Close"],
+                mode="lines",
+                name=ticker,
+                line=dict(width=2),
+            )
         )
-    )
 
     fig.update_layout(
-        title=f"{ticker} Close Price",
+        title="Stock Prices",
         xaxis_title="Date",
         yaxis_title="Price (USD)",
         yaxis_type="log" if use_log_scale else "linear",
@@ -48,27 +50,42 @@ def create_price_plot(df: pd.DataFrame, ticker: str, use_log_scale: bool) -> go.
     return fig
 
 
-def get_stock_data(ticker: str, use_log_scale: bool = True) -> tuple[pd.DataFrame | None, go.Figure]:
+def get_stock_data(tickers: list[str], use_log_scale: bool = True) -> tuple[pd.DataFrame | None, go.Figure]:
     """Get stock data and create plot."""
-    df = fetch_stock_data(ticker)
-    fig = create_price_plot(df, ticker, use_log_scale)
-    return df[columns], fig  # type: ignore
+    all_dfs = []
+    combined_df = pd.DataFrame()
+    
+    for ticker in tickers:
+        df = fetch_stock_data(ticker)
+        all_dfs.append((df, ticker))
+        if combined_df.empty:
+            combined_df = df[columns].copy()
+            combined_df = combined_df.rename(columns={'Close': ticker})
+        else:
+            df_to_merge = df[columns].copy()
+            df_to_merge = df_to_merge.rename(columns={'Close': ticker})
+            combined_df = pd.merge(combined_df, df_to_merge, on='Date')
+    
+    fig = create_price_plot(all_dfs, use_log_scale)
+    return combined_df, fig
 
 
-def update_plot(ticker: str, use_log_scale: bool = True) -> go.Figure:
+def update_plot(tickers: list[str], use_log_scale: bool = True) -> go.Figure:
     """Update plot only without fetching data again."""
-    df = fetch_stock_data(ticker)
-    return create_price_plot(df, ticker, use_log_scale)
+    all_dfs = [(fetch_stock_data(ticker), ticker) for ticker in tickers]
+    return create_price_plot(all_dfs, use_log_scale)
 
 
-initials = get_stock_data(stocks[0][1])
+initials = get_stock_data([stock[1] for stock in stocks[:3]])
 with gr.Blocks() as demo:
     gr.Markdown("## Stock Price")
     with gr.Row():
         ticker = gr.Dropdown(
             choices=stocks,
-            value=stocks[0][1],
+            value=[stock[1] for stock in stocks[:3]],
             label="Ticker",
+            multiselect=True,
+            max_choices=5,
         )
     stock_table = gr.DataFrame(
         value=initials[0],
