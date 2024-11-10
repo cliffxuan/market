@@ -26,10 +26,12 @@ def fetch_stock_data(ticker: str, period: str = "10y") -> pd.DataFrame:
     return df
 
 
-def create_price_plot(dfs: list[tuple[pd.DataFrame, str]], use_log_scale: bool, show_returns: bool) -> go.Figure:
+def create_price_plot(
+    dfs: list[tuple[pd.DataFrame, str]], use_log_scale: bool, show_returns: bool
+) -> go.Figure:
     """Create price plot with given configuration."""
     fig = go.Figure()
-    
+
     for df, ticker in dfs:
         y_values = df["Close"]
         if show_returns:
@@ -51,7 +53,9 @@ def create_price_plot(dfs: list[tuple[pd.DataFrame, str]], use_log_scale: bool, 
         title="Stock Performance",
         xaxis_title="Date",
         yaxis_title="Returns (%)" if show_returns else "Price (USD)",
-        yaxis_type="log" if use_log_scale and not show_returns else "linear",  # Disable log scale for returns
+        yaxis_type="log"
+        if use_log_scale and not show_returns
+        else "linear",  # Disable log scale for returns
         hovermode="x unified",
         template="plotly_dark",
         height=400,
@@ -59,27 +63,37 @@ def create_price_plot(dfs: list[tuple[pd.DataFrame, str]], use_log_scale: bool, 
     return fig
 
 
-def get_stock_data(tickers: list[str], period: str, use_log_scale: bool = True, show_returns: bool = False) -> tuple[pd.DataFrame | None, go.Figure]:
+def get_stock_data(
+    tickers: list[str],
+    period: str,
+    use_log_scale: bool = True,
+    show_returns: bool = False,
+) -> tuple[pd.DataFrame | None, go.Figure]:
     """Get stock data and create plot."""
     all_dfs = []
     combined_df = pd.DataFrame()
-    
+
     for ticker in tickers:
         df = fetch_stock_data(ticker, period)
         all_dfs.append((df, ticker))
         if combined_df.empty:
             combined_df = df[columns].copy()
-            combined_df = combined_df.rename(columns={'Close': ticker})
+            combined_df = combined_df.rename(columns={"Close": ticker})  # type: ignore
         else:
             df_to_merge = df[columns].copy()
-            df_to_merge = df_to_merge.rename(columns={'Close': ticker})
-            combined_df = pd.merge(combined_df, df_to_merge, on='Date')
-    
+            df_to_merge = df_to_merge.rename(columns={"Close": ticker})  # type: ignore
+            combined_df = pd.merge(combined_df, df_to_merge, on="Date")
+
     fig = create_price_plot(all_dfs, use_log_scale, show_returns)
     return combined_df, fig
 
 
-def update_plot(tickers: list[str], period: str, use_log_scale: bool = True, show_returns: bool = False) -> go.Figure:
+def update_plot(
+    tickers: list[str],
+    period: str,
+    use_log_scale: bool = True,
+    show_returns: bool = False,
+) -> go.Figure:
     """Update plot only without fetching data again."""
     all_dfs = [(fetch_stock_data(ticker, period), ticker) for ticker in tickers]
     return create_price_plot(all_dfs, use_log_scale, show_returns)
@@ -89,10 +103,10 @@ def update_plot(tickers: list[str], period: str, use_log_scale: bool = True, sho
 periods = ["5d", "1mo", "3mo", "6mo", "1y", "2y", "5y", "10y", "ytd", "max"]
 
 initials = get_stock_data(
-    [stock[1] for stock in stocks[:3]], 
-    DEFAULT_PERIOD, 
+    [stock[1] for stock in stocks[:3]],
+    DEFAULT_PERIOD,
     use_log_scale=DEFAULT_LOG_SCALE,
-    show_returns=DEFAULT_SHOW_RETURNS
+    show_returns=DEFAULT_SHOW_RETURNS,
 )
 with gr.Blocks() as demo:
     gr.Markdown("## Stock Price")
@@ -125,10 +139,14 @@ with gr.Blocks() as demo:
             label="Use Logarithmic Scale",
         )
     plot = gr.Plot(value=initials[1], label="Performance Chart")
-    
+
     # Update the change events to include period
-    ticker.change(get_stock_data, [ticker, period, log_scale, show_returns], [stock_table, plot])
-    period.change(get_stock_data, [ticker, period, log_scale, show_returns], [stock_table, plot])
+    ticker.change(
+        get_stock_data, [ticker, period, log_scale, show_returns], [stock_table, plot]
+    )
+    period.change(
+        get_stock_data, [ticker, period, log_scale, show_returns], [stock_table, plot]
+    )
     log_scale.change(update_plot, [ticker, period, log_scale, show_returns], plot)
     show_returns.change(update_plot, [ticker, period, log_scale, show_returns], plot)
 
