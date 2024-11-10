@@ -8,6 +8,8 @@ import yfinance as yf
 
 PWD = Path(__file__).absolute().parent
 DEFAULT_PERIOD = "3mo"
+DEFAULT_SHOW_RETURNS = True
+DEFAULT_LOG_SCALE = False
 stock_df = pd.read_csv(PWD / "data" / "spx-500.csv")
 stocks = [
     (f"{record['Security']} ({record['Symbol']})", record["Symbol"])
@@ -86,7 +88,12 @@ def update_plot(tickers: list[str], period: str, use_log_scale: bool = True, sho
 # Define period choices
 periods = ["5d", "1mo", "3mo", "6mo", "1y", "2y", "5y", "10y", "ytd", "max"]
 
-initials = get_stock_data([stock[1] for stock in stocks[:3]], DEFAULT_PERIOD)
+initials = get_stock_data(
+    [stock[1] for stock in stocks[:3]], 
+    DEFAULT_PERIOD, 
+    use_log_scale=DEFAULT_LOG_SCALE,
+    show_returns=DEFAULT_SHOW_RETURNS
+)
 with gr.Blocks() as demo:
     gr.Markdown("## Stock Price")
     with gr.Row():
@@ -110,11 +117,11 @@ with gr.Blocks() as demo:
     )
     with gr.Row():
         show_returns = gr.Checkbox(
-            value=True,
+            value=DEFAULT_SHOW_RETURNS,
             label="Show Returns (%)",
         )
         log_scale = gr.Checkbox(
-            value=False,
+            value=DEFAULT_LOG_SCALE,
             label="Use Logarithmic Scale",
         )
     plot = gr.Plot(value=initials[1], label="Performance Chart")
