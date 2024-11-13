@@ -230,7 +230,7 @@ initials = get_stock_data(
     display_mode=DEFAULT_SHOW_RETURNS,
 )
 with gr.Blocks() as demo:
-    gr.Markdown("## Stock Price")
+    gr.Markdown("# Market")
     with gr.Row():
         ticker = gr.Dropdown(
             choices=stocks,
