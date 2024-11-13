@@ -232,6 +232,8 @@ initials = get_stock_data(
 with gr.Blocks() as demo:
     gr.Markdown("# Market")
     with gr.Row():
+        gr.DataFrame(stock_df, label='S & P 500')
+    with gr.Row():
         ticker = gr.Dropdown(
             choices=stocks,
             value=initial_tickers,
