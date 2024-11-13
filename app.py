@@ -33,11 +33,10 @@ DEFAULT_DATA = DATA_CLOSE
 @lru_cache(maxsize=100)
 def fetch_stock_data(ticker: str, period: str, end: dt.date) -> pd.DataFrame:
     """Fetch stock data from yfinance with caching."""
+    end = dt.datetime.combine(end, dt.datetime.min.time())
     df = (
         yf.Ticker(ticker)
-        .history(
-            period, end=dt.datetime.combine(end, dt.datetime.min.time()).timestamp()
-        )
+        .history(period, end=end if period == "max" else end.timestamp())
         .reset_index()
     )
     df["Date"] = df["Date"].dt.strftime("%Y-%m-%d")
